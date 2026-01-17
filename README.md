@@ -1,6 +1,6 @@
 # opencode-docker-py
 
-Docker container for [OpenCode](https://opencode.ai) AI coding agent.
+> Fast, isolated Python environment with automatic dependency management that just works
 
 ## Features
 
