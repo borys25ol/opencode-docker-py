@@ -14,7 +14,7 @@ Docker container for [OpenCode](https://opencode.ai) AI coding agent.
 
 ```bash
 # Clone and setup
-git clone <https://github.com/borys25ol/opencode-docker-py> opencode-docker-py
+git clone https://github.com/borys25ol/opencode-docker-py opencode-docker-py
 cd opencode-docker-py
 
 # Configure
