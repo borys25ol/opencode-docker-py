@@ -1,0 +1,8 @@
+[project]
+name = "opencode-docker-py"
+version = "0.1.0"
+description = "Docker container for OpenCode"
+requires-python = ">=3.12"
+dependencies = [
+    "typer>=0.21.1",
+]

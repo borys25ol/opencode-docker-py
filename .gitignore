@@ -1,0 +1,8 @@
+docker-compose.yml
+backups
+.env
+.ruff_cache/
+.venv/
+.idea/
+.git
+config/opencode.json
