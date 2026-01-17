@@ -74,17 +74,19 @@ def main(
     backup_dir: str = typer.Option(
         "backups", "--backup-dir", "-b", help="Backup directory path"
     ),
-):
-    output_path = Path(output)
-    backup_path = Path(backup_dir)
+) -> None:
+    output_path: Path = Path(output)
+    backup_path: Path = Path(backup_dir)
 
-    masked_list = masked_dirs.split()
+    masked_list: list[str] = masked_dirs.split()
 
-    backup = backup_existing_file(filepath=output_path, backup_dir=backup_path)
+    backup: Path | None = backup_existing_file(
+        filepath=output_path, backup_dir=backup_path
+    )
     if backup:
         typer.echo(f"Backed up existing file to: {backup}")
 
-    yaml_content = generate_docker_compose_yaml(masked_dirs=masked_list)
+    yaml_content: str = generate_docker_compose_yaml(masked_dirs=masked_list)
 
     with open(output_path, "w") as f:
         f.write(yaml_content)
