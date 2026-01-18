@@ -21,6 +21,35 @@ echo "Starting OpenCode container for: $HOST_DIR"
 # Get project name from HOST_DIR.
 export PROJECT_NAME=$(basename "$HOST_DIR")
 
+# Convert space-separated string DIRS_TO_EXCLUDE into docker volume flags
+EXCLUDE_FLAGS=""
+for dir in $DIRS_TO_EXCLUDE; do
+    EXCLUDE_FLAGS+="-v /workspace/$dir "
+done
+
+# Convert space-separated string PORTS into docker port flags
+PORTS_FLAGS=""
+for port in $PORTS; do
+    PORTS_FLAGS+="-p $port:$port "
+done
+
+# Check if .env file exists
+ENV_FLAG=""
+if [ -f ".env" ]; then
+    ENV_FLAG="--env-file .env"
+else
+    echo "Warning: .env file not found. Running without env-file."
+fi
+
 # 4. Run the container using Docker Compose
 # --rm: automatically remove the container when you exit
-docker compose run --service-ports --rm agent
+docker run -it --rm \
+  --name opencode-agent-$PROJECT_NAME \
+  $PORTS_FLAGS \
+  -v "$(pwd)/config/AGENT_RULES.md:/home/opencode/.config/opencode/AGENT_RULES.md:ro" \
+  -v "$(pwd)/config/opencode.json:/home/opencode/.config/opencode/opencode.json:ro" \
+  -v "${HOST_DIR}:/workspace" \
+  $EXCLUDE_FLAGS \
+  -v "${PROJECT_NAME}_uv_cache:/home/opencode/.cache/uv" \
+  $ENV_FLAG \
+  opencode-docker-py-agent

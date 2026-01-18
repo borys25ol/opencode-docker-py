@@ -1,16 +1,14 @@
-.PHONY: sync generate config build agent
+.PHONY: config build agent
 
+# Tools to install in to the containers with apt-get.
+LOCAL_TOOLS := "curl ca-certificates git vim make"
 
-# Directories to exclude from the container.
+# Directories to exclude from the container (working only with directories).
 DIRS_TO_EXCLUDE := ".venv .git"
 
-sync:
-	@echo "Syncing project"
-	uv sync
+# Ports to expose.
+PORTS := "5000 8000"
 
-generate:
-	@echo "Generate docker-compose.yml"
-	uv run generate_docker_compose.py --masked-dirs $(DIRS_TO_EXCLUDE)
 
 config:
 	@echo "Copy config files"
@@ -18,8 +16,13 @@ config:
 
 build:
 	@echo "Building docker image"
-	docker compose build
+	docker build \
+		--build-arg LOCAL_TOOLS=$(LOCAL_TOOLS) \
+		-t opencode-docker-py-agent \
+		-f ./docker/Dockerfile ./docker
 
 agent:
 	@echo "Running coding agent"
-	@./docker/run_agent.sh $(DIR)
+	DIRS_TO_EXCLUDE=$(DIRS_TO_EXCLUDE) \
+	PORTS=$(PORTS) \
+	./docker/run_agent.sh $(DIR)

@@ -29,9 +29,6 @@
 ```bash
 # Edit Makefile to add more directories
 DIRS_TO_EXCLUDE := ".venv .ve .git node_modules dist build"
-
-# Regenerate docker-compose.yml
-make generate
 ```
 
 ### Automatic Dependency Installation
@@ -144,13 +141,10 @@ docker volume rm PROJECT_NAME_uv_cache
 ## Prerequisites
 
 - Docker 20.10+
-- Docker Compose 2.0+
 
 
 Available commands:
-- `make sync` - Sync Python dependencies
 - `make config` - Copy config files
-- `make generate` - Regenerate docker-compose.yml file
 - `make build` - Build Docker image
 - `make agent DIR=/path/to/your/project` - Run coding agent
 
@@ -167,9 +161,6 @@ make config
 # Copy .env.example to .env
 cp .env.example .env
 # Add CONTEXT7_API_KEY to .env
-
-# Generate docker-compose.yml file
-make generate
 
 # Build
 make build
@@ -210,9 +201,7 @@ CONTEXT7_API_KEY=your_key_here
 
 ## Customization
 
-Edit `Makefile` to:
-- Mask directories: `DIRS_TO_EXCLUDE := ".venv .git .ve node_modules"`
-
-Then run `make generate`
-
-Edit `docker-compose.yml` for port mappings.
+Edit `Makefile` to configure:
+- Tools to install in container: `LOCAL_TOOLS := "curl ca-certificates git vim make"`
+- Directories to mask from container: `DIRS_TO_EXCLUDE := ".venv .git"`
+- Ports to expose: `PORTS := "4096 8080"`

@@ -7,6 +7,8 @@ FROM ghcr.io/astral-sh/uv:latest AS uv_bin
 # while maintaining full compatibility with Python wheels and C-extensions.
 FROM ubuntu:24.04
 
+ARG LOCAL_TOOLS="curl ca-certificates git"
+
 # Consolidate environment variables to reduce layers.
 # UV_PYTHON_INSTALL_DIR: Ensures Python toolchains are stored in the persistent cache volume.
 # UV_LINK_MODE: Set to 'copy' to avoid performance warnings on different filesystems.
@@ -22,10 +24,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 # Combine system update, dependency installation, user creation, and directory prep.
 # This single RUN command reduces the number of intermediate image layers.
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
-    ca-certificates \
-    git \
+RUN apt-get update && apt-get install -y --no-install-recommends $LOCAL_TOOLS \
     && useradd -m -s /bin/bash opencode \
     && mkdir -p /home/opencode/.local/share/opencode \
                 /home/opencode/.config/opencode \
