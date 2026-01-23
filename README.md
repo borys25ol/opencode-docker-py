@@ -5,35 +5,53 @@
 ## Features
 
 - Dockerized environment with OpenCode CLI
-- Automatic venv setup and dependency installation
+- Automatic venv setup with optional dependency installation
 - Volume masking (.venv, .git, etc.)
-- Context7 MCP integration
-- Persistent UV cache
+- Optional, persistent UV cache
+
+## Project Structure
+
+```
+.
+├── Makefile                 # Build/run helpers and install/uninstall
+├── README.md                # Docs
+├── docker/                  # Image, entrypoint, and run script
+├── config/                  # OpenCode config + rules
+├── data/                    # Persistent OpenCode storage (sessions/logs)
+├── .env.example             # Env template
+└── .env                     # Local env (not committed)
+```
 
 ## How It Works
 
 ### Directory Masking Technique
 
-**Problem:** When mounting a project directory into a Docker container, the entire directory structure is shared. However, you often want to exclude certain directories from the container's view—particularly virtual environments (`.venv`, `.ve`), version control (`.git`), and other project-specific directories.
-
-**Solution:** Docker volume masking works by mounting empty anonymous volumes over specific paths within the container. When you mount an anonymous volume at `/workspace/.venv`, it overlays the host's `.venv` directory with an empty container volume, effectively "masking" it from view.
+Docker mounts can expose everything in your project, including `.venv` and `.git`. This setup masks those paths by mounting empty volumes over them (for example `/workspace/.venv`), so the container sees a clean workspace.
 
 **Why this matters:**
 
-- **Isolation:** The container uses its own virtual environment at `/home/opencode/.venv`, completely separate from your host's venv
-- **Performance:** Prevents Docker from syncing large `.venv` or `.git` directories
-- **Clean State:** Container always starts with a fresh, predictable environment
-- **No Conflicts:** Host dependencies won't interfere with container dependencies
+- **Isolation:** Container venv at `/home/opencode/.venv`
+- **Performance:** Avoids syncing large directories
+- **Clean State:** Predictable environment on each run
 
 **How to customize:**
 ```bash
-# Edit Makefile to add more directories
-DIRS_TO_EXCLUDE := ".venv .ve .git node_modules dist build"
+# Add extra excludes at runtime
+EXCLUDE=".venv .ve dist build" dockercode /path/to/your/project
+```
+
+### File Masking Technique
+
+Files can be hidden by bind-mounting them to `/dev/null` inside the container. This is useful for local secrets like `.env.local` that should not be visible to the container.
+
+**Example:**
+```bash
+EXCLUDE=".env.local secrets.json" dockercode /path/to/your/project
 ```
 
 ### Automatic Dependency Installation
 
-The container automatically detects and installs Python dependencies every time it starts. No manual setup required—it just works.
+When `INSTALL_DEPS=true`, the container detects and installs Python dependencies on startup.
 
 **Detection order:**
 1. Checks for `requirements.txt` → Uses `uv pip install -r requirements.txt`
@@ -41,10 +59,10 @@ The container automatically detects and installs Python dependencies every time 
 3. No dependency files found → Skips installation, proceeds directly to OpenCode
 
 **Benefits:**
-- **Zero Configuration:** Works with any standard Python project
-- **Fast:** UV is 10-100x faster than pip
+- **Zero configuration:** Works with any standard Python project
+- **Fast:** uv is 10-100x faster than pip
 - **Automatic venv:** Creates `/home/opencode/.venv` on first run, refreshes on subsequent runs
-- **Smart Refresh:** Only installs missing or updated packages
+- **Smart refresh:** Only installs missing or updated packages
 
 **Example scenarios:**
 
@@ -66,44 +84,21 @@ pyproject.toml   # uv sync installs all dependencies
 script.py        # OpenCode starts directly, no installation step
 ```
 
-### UV Cache for Performance
+### UV Cache
 
-The container uses a persistent Docker volume to cache all UV-related artifacts, dramatically improving startup times and reducing network usage.
+When `ENABLE_CACHE=true`, the container mounts a Docker volume at `/home/opencode/.cache/uv` to store uv downloads and build artifacts. This speeds up subsequent runs and reduces network usage. Clear it anytime with `make clean-cache`.
 
-**What gets cached:**
+### Persistent OpenCode Data
 
-- **Downloaded packages:** All Python wheels and source distributions
-- **Multiple Python versions:** Any Python versions installed by uv (e.g., 3.11, 3.12, 3.13)
-- **Build artifacts:** Compiled extensions and build caches
-- **Package metadata:** Resolution results for faster future installs
+The `data/` directory is mounted into the container at `/home/opencode/.local/share/opencode` and keeps your OpenCode state between runs.
 
-**Performance impact:**
+**What it contains:**
 
-| Scenario | First Run | Subsequent Runs |
-|----------|-----------|-----------------|
-| Install 10 packages | ~15s | <1s |
-| Install 50 packages | ~45s | <2s |
-| Install 100+ packages | ~90s | <5s |
+- **Sessions and diffs:** conversation history, run state, and deltas
+- **Logs:** runtime logs for troubleshooting
+- **Snapshots:** periodic state snapshots and metadata
 
-**Cache location:** `/home/opencode/.cache/uv` (mapped to Docker volume `uv_cache`)
-
-**Cross-project sharing:** The cache is persistent across container restarts and can be shared across different projects on the same machine (when using the same cache volume name).
-
-**Environment configuration** (from Dockerfile):
-```dockerfile
-UV_CACHE_DIR=/home/opencode/.cache/uv          # Cache directory
-UV_PYTHON_INSTALL_DIR=/home/opencode/.cache/uv/python  # Python versions
-UV_LINK_MODE=copy                                # Safe across filesystems
-```
-
-**Cache management:**
-```bash
-# View cache size
-docker volume inspect PROJECT_NAME_uv_cache
-
-# Clear cache if needed
-docker volume rm PROJECT_NAME_uv_cache
-```
+You can delete `data/` to reset OpenCode to a clean state, but you'll lose session history.
 
 ### Architecture Overview
 
@@ -143,10 +138,20 @@ docker volume rm PROJECT_NAME_uv_cache
 - Docker 20.10+
 
 
+## Commands
+
 Available commands:
-- `make config` - Copy config files
 - `make build` - Build Docker image
 - `make agent DIR=/path/to/your/project` - Run coding agent
+- `make clean-cache` - Remove uv cache Docker volumes
+- `make install` - Install `dockercode` CLI globally
+- `make uninstall` - Remove `dockercode` CLI
+
+**About `make install`:**
+Makes `docker/run_agent.sh` executable and creates a symlink at `/usr/local/bin/dockercode` (requires `sudo`). The `dockercode` command simply calls that script, so updates to the script take effect immediately.
+
+**About `make uninstall`:**
+Removes the `/usr/local/bin/dockercode` symlink (requires `sudo`).
 
 ## Quick Start
 
@@ -155,53 +160,89 @@ Available commands:
 git clone https://github.com/borys25ol/opencode-docker-py opencode-docker-py
 cd opencode-docker-py
 
-# Configure
-make config
-
 # Copy .env.example to .env
 cp .env.example .env
-# Add CONTEXT7_API_KEY to .env
 
 # Build
 make build
 
+# Install CLI (optional)
+make install
+
 # Run
-make agent DIR=/path/to/your/project
+dockercode /path/to/your/project
+
+# Alternative (no install)
+./docker/run_agent.sh /path/to/your/project
 ```
 
 ## Configuration
 
-**.env:**
-```env
-CONTEXT7_API_KEY=your_key_here
-```
-
-**config/opencode.json:**
+**Optional `config/opencode.json`:**
+OpenCode runs without this file. Create it only if you want custom settings.
 ```json
 {
-  "model": "opencode/glm-4.7-free",
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {},
+  "instructions": [
+    "/home/opencode/.config/opencode/AGENT_RULES.md"
+  ],
   "theme": "tokyonight",
-  "mcp": {
-    "context7": {
-      "enabled": true,
-      "headers": {
-        "CONTEXT7_API_KEY": "{env:CONTEXT7_API_KEY}"
-      }
-    }
-  }
+  "model": "opencode/glm-4.7-free"
 }
 ```
 
-**config/AGENT_RULES.md:** - Custom agent behavior rules
+**Environment variables (run-time):**
+- `INSTALL_DEPS=true|false` - Install Python dependencies on start (default: false)
+- `ENABLE_CACHE=true|false` - Enable uv cache volume (default: false)
+- `ENV_FILE=/path/to/.env` - Select env file (default: repo `.env`)
+- `EXCLUDE="dir1 dir2 file1"` - Extra dirs/files to mask
+- `PORTS="3000 5173"` - Forward one or more ports into the container
 
-## Ports
-
-- `4096` - OpenCode UI
-- `8080` - Local API servers
+**Defaults (run_agent.sh):**
+- `DEFAULT_DIRS_TO_EXCLUDE=".git __pycache__"`
+- `DEFAULT_FILES_TO_EXCLUDE=".DS_Store"`
+- `DEFAULT_PORTS=""`
 
 ## Customization
 
 Edit `Makefile` to configure:
 - Tools to install in container: `LOCAL_TOOLS := "curl ca-certificates git vim make"`
-- Directories to mask from container: `DIRS_TO_EXCLUDE := ".venv .git"`
-- Ports to expose: `PORTS := "4096 8080"`
+- Installed CLI name: `BIN_NAME := dockercode`
+
+Adjust runtime behavior with environment variables when running `dockercode`.
+
+## Usage Examples
+
+```bash
+# Enable uv cache and dependency install
+ENABLE_CACHE=true INSTALL_DEPS=true dockercode /path/to/your/project
+
+# Exclude extra dirs/files from the container
+EXCLUDE=".idea .vscode .env.local" dockercode /path/to/your/project
+
+# Use a specific env file
+ENV_FILE=/path/to/custom.env dockercode /path/to/your/project
+
+# Forward ports to the container (space-separated list)
+PORTS="3000 5173" dockercode /path/to/your/project
+```
+
+## Tips
+
+- The default exclusions are `.git` and `__pycache__` plus `.DS_Store` files.
+- To clear cached uv artifacts, run `make clean-cache`.
+
+## Troubleshooting
+
+- Docker permission errors: ensure your user can run Docker (or use `sudo`).
+- Env file not found: set `ENV_FILE=/path/to/.env` or create `.env` from `.env.example`.
+- Cache not appearing: run with `ENABLE_CACHE=true` and re-check Docker volumes.
+
+## FAQ
+
+**Why is caching disabled by default?**
+Caching is opt-in so the container behaves predictably on first run and avoids creating Docker volumes unless you want them.
+
+**How do I exclude more paths from the container?**
+Add them via `EXCLUDE="dir1 dir2 file1"` when you run `dockercode`.

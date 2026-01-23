@@ -3,22 +3,24 @@
 # Exit immediately if a command exits with a non-zero status
 set -e
 
-# 1. Initialize or refresh the virtual environment
-# uv venv is idempotent and extremely fast if the venv already exists
-uv venv -q /home/opencode/.venv
+# 1. Full Setup Logic (Venv + Installation)
+if [ "$INSTALL_DEPS" = "true" ]; then
+    echo "🛠️ [Entrypoint] Full setup mode enabled."
 
-# 2. Conditional dependency installation
-# Check for requirements.txt first
-if [ -f "requirements.txt" ]; then
-    echo "📦 [Entrypoint] Found requirements.txt. Installing dependencies..."
-    uv pip install -q -r requirements.txt
-# If not found, check for pyproject.toml
-elif [ -f "pyproject.toml" ]; then
-    echo "📦 [Entrypoint] Found pyproject.toml. Syncing dependencies..."
-    uv sync -q
-# If neither exists, just skip and proceed
+    # Initialize virtual environment only when we are going to install something
+    uv venv -q /home/opencode/.venv
+
+    if [ -f "requirements.txt" ]; then
+        echo "📦 [Entrypoint] Installing from requirements.txt..."
+        uv pip install -q -r requirements.txt
+    elif [ -f "pyproject.toml" ]; then
+        echo "📦 [Entrypoint] Syncing from pyproject.toml..."
+        uv sync -q
+    else
+        echo "ℹ️ [Entrypoint] No dependency files found, but venv created."
+    fi
 else
-    echo "ℹ️ [Entrypoint] No dependency files found. Skipping installation step."
+    echo "⏭️ [Entrypoint] INSTALL_DEPS is false. Skipping venv and installation."
 fi
 
 # 3. Launch the main application

@@ -5,4 +5,7 @@ backups
 .venv/
 .idea/
 .git
+data/
 config/opencode.json
+config/opencode.backup.json
+config/AGENT_RULES.md
